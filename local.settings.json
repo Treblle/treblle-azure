@@ -1,0 +1,14 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "java",
+    "AzureWebJobsStorage": "Azure WebJobs Storage Connection String",
+    "eventhubconnection": "Change this to your Event Hub Name Space connection string",
+    "eventhub": "Change this to your Event Hub Name",
+    "consumergroup": "$Default",
+    "TREBLLE_API_KEY": "your-treblle-api-key-here",
+    "TREBLLE_SDK_TOKEN": "your-treblle-sdk-token-here",
+    "ADDITIONAL_MASK_KEYWORDS": "Ocp-Apim-Subscription-Key"
+  }
+}
+

@@ -1,0 +1,153 @@
+<!--
+    - Policies are applied in the order they appear.
+    - Position <base/> inside a section to inherit policies from the outer scope.
+    - Comments within policies are not preserved.
+-->
+<!-- Add policies as children to the <inbound>, <outbound>, <backend>, and <on-error> elements -->
+<policies>
+    <!-- Throttle, authorize, validate, cache, or transform the requests -->
+    <inbound>
+
+        <!-- CHANGE 1 START-->
+        <set-variable name="request-timestamp" value="@(context.Timestamp.ToString("o"))" />
+        <set-variable name="request-body" value="@{
+            var body = context.Request.Body?.As<string>(preserveContent: true);
+            var maxBodySize = 70000; // Limit to fit in single event
+            if (body != null && body.Length > maxBodySize) {
+                body = body.Substring(0, maxBodySize);
+            }
+            return (body != null) ? System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(body)) : string.Empty;
+        }" />
+        <!-- CHANGE 1 END-->
+
+
+        <base />
+    </inbound>
+    <!-- Control if and how the requests are forwarded to services  -->
+    <backend>
+        <base />
+    </backend>
+    <!-- Customize the responses -->
+    <outbound>
+        <base />
+
+        <!-- CHANGE 2 START-->
+        <log-to-eventhub logger-id="treblle-logger" partition-id="0">@{
+
+                var maxBodySize = 70000; // Limit to fit in single event
+                var body = context.Response.Body?.As<string>(preserveContent: true);
+                var origBodyLen = (body != null) ? body.Length : 0;
+                if (body != null && origBodyLen > maxBodySize) {
+                    body = body.Substring(0, maxBodySize);
+                }
+                var resBody = (body != null) ? System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(body)) : string.Empty;
+
+                var resHeaders = context.Response.Headers
+                    .Select(h => string.Format("{0}: {1}", h.Key, 
+                        String.Join(", ", h.Value).Replace("\"", "\\\""))) 
+                    .ToArray<string>();
+
+                var reqHeaders = context.Request.Headers
+                    .Select(h => string.Format("{0}: {1}", h.Key, 
+                        String.Join(", ", h.Value).Replace("\"", "\\\""))) 
+                    .ToArray<string>();
+
+                var combinedLog = new JObject(
+                    new JProperty("event_type", "treblle_log"),
+                    new JProperty("internal_id", context.Api.Id),
+                    new JProperty("server", new JObject(
+                        new JProperty("timezone", "UTC"),
+                        new JProperty("os", new JObject(
+                            new JProperty("name", "Unknown"),
+                            new JProperty("release", "Unknown"),
+                            new JProperty("architecture", "Unknown")
+                        )),
+                        new JProperty("signature", ""),
+                        new JProperty("protocol", context.Request.OriginalUrl.Scheme)
+                    )),
+                    new JProperty("request", new JObject(
+                        new JProperty("timestamp", context.Variables["request-timestamp"]),
+                        new JProperty("method", context.Request.Method),
+                        new JProperty("ip_address", context.Request.IpAddress),
+                        new JProperty("original_url", context.Request.OriginalUrl.ToString()),
+                        new JProperty("headers", string.Join(";;", reqHeaders)),
+                        new JProperty("body", context.Variables["request-body"])
+
+                    )),
+                    new JProperty("response", new JObject(
+                        new JProperty("timestamp", context.Timestamp.Add(context.Elapsed).ToString("o")),
+                        new JProperty("status_code", context.Response.StatusCode),
+                        new JProperty("headers", string.Join(";;", resHeaders)),
+                        new JProperty("body_length", origBodyLen),
+                        new JProperty("body", resBody)
+                    ))
+                );
+                return combinedLog.ToString();
+            }</log-to-eventhub>
+             <!-- CHANGE 2 END-->
+
+    </outbound>
+    <!-- Handle exceptions and customize error responses  -->
+    <on-error>
+        <base />
+
+        <!-- CHANGE 3 START-->
+        <log-to-eventhub logger-id="treblle-logger" partition-id="0">@{
+
+                var maxBodySize = 70000; // Limit to fit in single event
+                var body = context.Response.Body?.As<string>(preserveContent: true);
+                var origBodyLen = (body != null) ? body.Length : 0;
+                if (body != null && origBodyLen > maxBodySize) {
+                    body = body.Substring(0, maxBodySize);
+                }
+                var resBody = (body != null) ? System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(body)) : string.Empty;
+
+                var resHeaders = context.Response.Headers
+                    .Select(h => string.Format("{0}: {1}", h.Key, 
+                        String.Join(", ", h.Value).Replace("\"", "\\\""))) 
+                    .ToArray<string>();
+
+                var reqHeaders = context.Request.Headers
+                    .Select(h => string.Format("{0}: {1}", h.Key, 
+                        String.Join(", ", h.Value).Replace("\"", "\\\""))) 
+                    .ToArray<string>();
+                
+                var reqBody = context.Variables.GetValueOrDefault<string>("request-body", string.Empty);
+                var reqTimestamp = context.Variables.GetValueOrDefault<string>("request-timestamp", string.Empty);
+
+                var combinedLog = new JObject(
+                    new JProperty("event_type", "treblle_log"),
+                    new JProperty("internal_id", context.Api.Id),
+                    new JProperty("server", new JObject(
+                        new JProperty("timezone", "UTC"),
+                        new JProperty("os", new JObject(
+                            new JProperty("name", "Unknown"),
+                            new JProperty("release", "Unknown"),
+                            new JProperty("architecture", "Unknown")
+                        )),
+                        new JProperty("signature", ""),
+                        new JProperty("protocol", context.Request.OriginalUrl.Scheme)
+                    )),
+                    new JProperty("request", new JObject(
+                        new JProperty("timestamp", reqTimestamp),
+                        new JProperty("method", context.Request.Method),
+                        new JProperty("ip_address", context.Request.IpAddress),
+                        new JProperty("original_url", context.Request.OriginalUrl.ToString()),
+                        new JProperty("headers", string.Join(";;", reqHeaders)),
+                        new JProperty("body", reqBody)
+
+                    )),
+                    new JProperty("response", new JObject(
+                        new JProperty("timestamp", context.Timestamp.Add(context.Elapsed).ToString("o")),
+                        new JProperty("status_code", context.Response.StatusCode),
+                        new JProperty("headers", string.Join(";;", resHeaders)),
+                        new JProperty("body_length", origBodyLen),
+                        new JProperty("body", resBody)
+                    ))
+                );
+                return combinedLog.ToString();
+            }</log-to-eventhub>
+        <!-- CHANGE 3 END-->
+
+    </on-error>
+</policies>

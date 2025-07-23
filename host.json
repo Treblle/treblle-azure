@@ -1,0 +1,26 @@
+{
+  "version": "2.0",
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.*, 5.0.0)"
+  },
+  "extensions": {
+        "eventHubs": {
+            "maxEventBatchSize" : 10,
+            "minEventBatchSize" : 1,
+            "maxWaitTime": "00:00:05",
+            "batchCheckpointFrequency" : 1,
+            "prefetchCount" : 100,
+            "initialOffsetOptions" : {
+                "type" : "fromStart",
+                "enqueuedTimeUtc" : ""
+            },
+            "clientRetryOptions":{
+                "mode" : "exponential",
+                "tryTimeout" : "00:01:00",
+                "delay" : "00:00:00.80",
+                "maxRetries": 3
+            }
+        }
+    }
+}
